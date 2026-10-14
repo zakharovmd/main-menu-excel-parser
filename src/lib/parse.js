@@ -264,8 +264,14 @@ export async function parseWorkbook(file) {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array" });
 
+  // Скрытые листы (hidden / veryHidden) — это черновики и старые шаблоны,
+  // которых человек в Excel не видит. В меню берём только видимые.
+  const meta = wb.Workbook?.Sheets ?? [];
+  const visible = wb.SheetNames.filter((_, i) => !meta[i]?.Hidden);
+  if (!visible.length) throw new Error("В файле нет видимых листов");
+
   const blocks = [];
-  for (const name of wb.SheetNames) {
+  for (const name of visible) {
     const rows = sheetRows(wb.Sheets[name]);
     if (!rows.some((r) => filled(r).length)) continue;
     const header = findHeader(rows);
