@@ -29,7 +29,7 @@ export default function Dropzone({ onFiles, onPick, busy }) {
         Меню, готовое <span className="accent-italic">к печати</span>
       </h1>
       <p className="relative mt-5 max-w-xl text-[15px] leading-relaxed text-mocha md:text-base">
-        Перетащите сюда файл «Меню N неделя.xlsx». Дни недели, разделы, выход и цены разложатся по
+        Перетащите сюда файл Excel. Дни недели, разделы, выход и цены разложатся по
         фирменным страницам с логотипом. Результат сохранится в браузере, и любое поле можно поправить.
       </p>
       <button type="button" onClick={onPick} disabled={busy} className="btn-primary relative mt-8 !h-12 !px-7 !text-[15px]">
