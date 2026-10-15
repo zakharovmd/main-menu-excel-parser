@@ -54,6 +54,9 @@ export default function Settings({ settings, onChange }) {
         <Toggle checked={settings.showPrice} onChange={(v) => onChange({ showPrice: v })}>
           Показывать цены
         </Toggle>
+        <Toggle checked={settings.showKbju !== false} onChange={(v) => onChange({ showKbju: v })}>
+          Показывать КБЖУ
+        </Toggle>
         <Toggle checked={settings.mergePortions !== false} onChange={(v) => onChange({ mergePortions: v })}>
           Склеивать порции (250 / 150 г)
         </Toggle>

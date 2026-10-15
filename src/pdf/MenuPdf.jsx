@@ -12,6 +12,7 @@ const C = {
   clay: "#944920",
   clayDeep: "#6F3516",
   leaf: "#75A138",
+  leafDeep: "#4E6B22",
 };
 
 let fontsReady = false;
@@ -73,6 +74,21 @@ export function formatWeight(w) {
   return s;
 }
 
+/**
+ * «450/18/36/14» → «450 ккал · Б 18 · Ж 36 · У 14». Если чисел не четыре или
+ * вариантов несколько (фреш), выводим как в файле: «КБЖУ 113/2/0,8/26 · …».
+ */
+export function formatKbju(values) {
+  const groups = [values].flat().join(" ").split(/\s+/).filter(Boolean);
+  if (!groups.length) return "";
+  const parts = groups[0].split("/");
+  if (groups.length === 1 && parts.length === 4) {
+    const [kcal, p, f, c] = parts;
+    return `${kcal} ккал · Б ${p} · Ж ${f} · У ${c}`;
+  }
+  return `КБЖУ ${groups.join(" · ")}`;
+}
+
 const formatPrice = (p) => (String(p || "").trim() ? `${p} ₽` : "");
 
 /** Подряд идущие одноимённые блюда (порции 250/150) склеиваются в одну строку. */
@@ -83,8 +99,9 @@ export function mergePortions(items) {
     if (prev && prev.name.trim().toLowerCase() === it.name.trim().toLowerCase() && !it.desc) {
       prev.weights.push(it.weight);
       prev.prices.push(it.price);
+      prev.kbjus.push(it.kbju);
     } else {
-      out.push({ ...it, weights: [it.weight], prices: [it.price] });
+      out.push({ ...it, weights: [it.weight], prices: [it.price], kbjus: [it.kbju] });
     }
   }
   return out.map((it) => {
@@ -98,6 +115,7 @@ export function mergePortions(items) {
           ? `${weights.join(" / ")} ${unit}`
           : weights.map(formatWeight).join(" / "),
       priceLabel: prices.length ? `${prices.join(" / ")} ₽` : "",
+      kbjuLabel: formatKbju(it.kbjus.filter(Boolean)),
     };
   });
 }
@@ -105,7 +123,12 @@ export function mergePortions(items) {
 function prepareItems(items, settings) {
   const visible = items.filter((i) => i.name.trim());
   if (settings.mergePortions !== false) return mergePortions(visible);
-  return visible.map((i) => ({ ...i, weightLabel: formatWeight(i.weight), priceLabel: formatPrice(i.price) }));
+  return visible.map((i) => ({
+    ...i,
+    weightLabel: formatWeight(i.weight),
+    priceLabel: formatPrice(i.price),
+    kbjuLabel: formatKbju(i.kbju || ""),
+  }));
 }
 
 /** Делим разделы на две колонки так, чтобы высоты были примерно равны. */
@@ -117,7 +140,8 @@ function splitColumns(sections, fs, colWidth) {
       (acc, i) =>
         acc +
         fs * 1.75 * Math.ceil((i.name.length + 14) / charsPerLine) +
-        (i.desc ? fs * 1.3 * Math.ceil(i.desc.length / (charsPerLine * 1.2)) : 0),
+        (i.desc ? fs * 1.3 * Math.ceil(i.desc.length / (charsPerLine * 1.2)) : 0) +
+        (i.kbjuLabel ? fs * 1.2 : 0),
       0,
     );
   const heights = sections.map(h);
@@ -180,6 +204,7 @@ function makeStyles(settings) {
       nameWrap: { flexShrink: 1, maxWidth: "74%" },
       name: { fontSize: fs, lineHeight: 1.3 },
       desc: { fontSize: 7.2 * k, color: C.mocha, lineHeight: 1.3, marginTop: 1 },
+      kbju: { fontSize: 6.8 * k, fontWeight: 600, color: C.leafDeep, letterSpacing: 0.2, lineHeight: 1.3, marginTop: 1 },
       leader: {
         flexGrow: 1,
         minWidth: 12,
@@ -221,11 +246,13 @@ function logoPosition(corner) {
 function Item({ it, settings, s }) {
   const weight = settings.showWeight ? it.weightLabel : "";
   const price = settings.showPrice ? it.priceLabel : "";
+  const kbju = settings.showKbju !== false ? it.kbjuLabel : "";
   return (
     <View style={s.row} wrap={false}>
       <View style={s.nameWrap}>
         <Text style={s.name}>{it.name}</Text>
         {it.desc ? <Text style={s.desc}>{it.desc}</Text> : null}
+        {kbju ? <Text style={s.kbju}>{kbju}</Text> : null}
       </View>
       {weight || price ? <View style={s.leader} /> : null}
       {weight ? <Text style={s.weight}>{weight}</Text> : null}

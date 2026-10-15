@@ -8,7 +8,7 @@ const move = (arr, i, dir) => {
   [arr[i], arr[j]] = [arr[j], arr[i]];
 };
 
-const newItem = () => ({ id: uid(), weight: "", name: "", desc: "", price: "" });
+const newItem = () => ({ id: uid(), weight: "", name: "", desc: "", kbju: "", price: "" });
 
 export default function BlockEditor({ doc, block, onSelect, mutate }) {
   if (!block) return null;
@@ -129,6 +129,12 @@ export default function BlockEditor({ doc, block, onSelect, mutate }) {
                       <div className="flex min-w-0 flex-col">
                         <input className="field text-[15px] text-ink" value={it.name} placeholder="Название блюда" onChange={set("name")} />
                         <input className="field text-xs text-mocha" value={it.desc} placeholder="состав (необязательно)" onChange={set("desc")} />
+                        <input
+                          className="field text-xs font-semibold text-leaf-deep"
+                          value={it.kbju || ""}
+                          placeholder="КБЖУ: ккал/б/ж/у"
+                          onChange={set("kbju")}
+                        />
                       </div>
                       <input
                         className="field col-start-2 text-sm font-semibold sm:col-start-auto"

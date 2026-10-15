@@ -8,6 +8,6 @@ for (const b of doc.blocks) {
   console.log(`\n## ${b.title} | ${b.subtitle} | note: ${b.note}`);
   for (const s of b.sections) {
     console.log(`  # ${s.title || "(без названия)"} (${s.items.length})`);
-    for (const i of s.items) console.log(`     ${i.weight.padEnd(7)} ${i.name}${i.desc ? "  {" + i.desc + "}" : ""}  — ${i.price}`);
+    for (const i of s.items) console.log(`     ${i.weight.padEnd(7)} [${i.kbju || "-"}] ${i.name}${i.desc ? "  {" + i.desc + "}" : ""}  — ${i.price}`);
   }
 }

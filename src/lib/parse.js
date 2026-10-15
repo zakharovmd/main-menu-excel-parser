@@ -8,14 +8,15 @@ import { uid } from "./uid.js";
  *   doc.blocks[] — каждая страница (или группа страниц) PDF:
  *     { id, kind: "day" | "list", title, subtitle, enabled, note, sections[] }
  *   section: { id, title, items[] }
- *   item:    { id, weight, name, desc, price }
+ *   item:    { id, weight, name, desc, kbju, price }
  *
  * Понимает три вида листов, которые встречаются в файлах «Меню N неделя»:
  *   1. Недельная сетка — в шапке несколько «Выход … <день> … Цена» подряд.
  *   2. Список — одна пара «Выход … Цена» (меню на Пн–Пт).
  *   3. Простой столбец строк «<код> <название> <выход>» (завтраки).
  * Столбцы ищутся по шапке, а не по фиксированным буквам: в разных неделях
- * таблица сдвинута на колонку.
+ * таблица сдвинута на колонку. Столбец КБЖУ («450/18/36/14») необязателен:
+ * его находим по заголовку, а если заголовка нет — по самим значениям.
  */
 
 const DAY_ACCENTS = ["#75A138", "#944920", "#4E6B22", "#C0702B", "#D08C2C", "#6F3516", "#7E6653"];
@@ -31,6 +32,16 @@ const clean = (v) =>
     .trim();
 
 const isNumeric = (v) => /^\d+([.,]\d+)?$/.test(clean(v));
+
+const KBJU_GROUP = /\d+(?:[.,]\d+)?(?:\/\d+(?:[.,]\d+)?){2,3}/.source;
+/** «450/18/36/14», у фреша — несколько вариантов через пробел. */
+const KBJU_RE = new RegExp(`^${KBJU_GROUP}(?:\\s+${KBJU_GROUP})*$`);
+const isKbjuHeader = (v) => /^кбжу$/i.test(clean(v));
+
+function normKbju(v) {
+  const s = clean(v).replace(/\s*\/\s*/g, "/");
+  return KBJU_RE.test(s) ? s : "";
+}
 
 function normWeight(v) {
   let s = clean(v);
@@ -70,10 +81,10 @@ function splitName(raw, weight) {
   return { name, desc };
 }
 
-const item = (weight, rawName, price) => {
+const item = (weight, rawName, price, kbju) => {
   const w = normWeight(weight);
   const { name, desc } = splitName(rawName, w);
-  return { id: uid(), weight: w, name, desc, price: normPrice(price) };
+  return { id: uid(), weight: w, name, desc, kbju: normKbju(kbju), price: normPrice(price) };
 };
 
 const section = (title = "") => ({ id: uid(), title: clean(title), items: [] });
@@ -93,6 +104,28 @@ function findHeader(rows) {
     if (out.length && price.length) return { r, out, price, cells };
   }
   return null;
+}
+
+/**
+ * Столбец КБЖУ между «Выход» и «Цена»: по заголовку, иначе — столбец, где
+ * большинство заполненных ячеек выглядят как «ккал/б/ж/у».
+ */
+function findKbjuCol(rows, header, from, to, exclude) {
+  const byTitle = header.cells.find(({ c, v }) => c > from && c < to && isKbjuHeader(v));
+  if (byTitle) return byTitle.c;
+  for (let c = from + 1; c < to; c++) {
+    if (exclude.includes(c)) continue;
+    let hits = 0;
+    let total = 0;
+    for (let r = header.r + 1; r < rows.length; r++) {
+      const v = clean(rows[r]?.[c]);
+      if (!v) continue;
+      total++;
+      if (KBJU_RE.test(v)) hits++;
+    }
+    if (hits >= 3 && hits / total > 0.7) return c;
+  }
+  return -1;
 }
 
 /**
@@ -116,11 +149,12 @@ function parseWeekGrid(rows, header) {
     const priceCol = header.price.find((p) => p > outCol);
     const nextOut = header.out[i + 1] ?? Infinity;
     const named = header.cells.find(
-      ({ c, v }) => c > outCol && c < priceCol && c < nextOut && !/^код$/i.test(clean(v)),
+      ({ c, v }) => c > outCol && c < priceCol && c < nextOut && !/^код$/i.test(clean(v)) && !isKbjuHeader(v),
     );
     const nameCol = named ? named.c : priceCol - 1;
     const title = named ? clean(named.v) : `День ${i + 1}`;
-    return { outCol, nameCol, priceCol, title, sections: [section()], notes: [] };
+    const kbjuCol = findKbjuCol(rows, header, outCol, Math.min(priceCol, nextOut), [nameCol]);
+    return { outCol, nameCol, priceCol, kbjuCol, title, sections: [section()], notes: [] };
   });
 
   let blankBefore = false;
@@ -152,7 +186,7 @@ function parseWeekGrid(rows, header) {
     for (const d of days) {
       const name = clean(row[d.nameCol]);
       if (!name) continue;
-      d.sections.at(-1).items.push(item(row[d.outCol], row[d.nameCol], row[d.priceCol]));
+      d.sections.at(-1).items.push(item(row[d.outCol], row[d.nameCol], row[d.priceCol], row[d.kbjuCol]));
     }
   }
 
@@ -172,9 +206,10 @@ function parseWeekGrid(rows, header) {
 function parseList(rows, header, sheetName) {
   const outCol = header.out[0];
   const priceCol = header.price[0];
-  const named = header.cells.find(({ c }) => c > outCol && c < priceCol);
+  const named = header.cells.find(({ c, v }) => c > outCol && c < priceCol && !isKbjuHeader(v));
   const nameCol = named ? named.c : outCol + 1;
   const subtitle = named ? clean(named.v).replace(/-/g, "–") : "";
+  const kbjuCol = findKbjuCol(rows, header, outCol, priceCol, [nameCol]);
 
   const sections = [section()];
   const notes = [];
@@ -194,7 +229,7 @@ function parseList(rows, header, sheetName) {
       sections.push(section(text));
       continue;
     }
-    sections.at(-1).items.push(item(row[outCol], raw, row[priceCol]));
+    sections.at(-1).items.push(item(row[outCol], raw, row[priceCol], row[kbjuCol]));
   }
 
   return {
@@ -252,6 +287,7 @@ function docTitle(fileName) {
 export const defaultSettings = () => ({
   showWeight: true,
   showPrice: true,
+  showKbju: true,
   cream: true,
   mergePortions: true,
   columns: 2,
