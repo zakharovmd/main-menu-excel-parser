@@ -293,7 +293,7 @@ export const defaultSettings = () => ({
   columns: 2,
   scale: 1,
   logoCorner: "top-right",
-  footer: "main-menu.ru · +7 916 762-20-48",
+  footer: "Main-menu.ru · +7 916 762-20-48",
 });
 
 export async function parseWorkbook(file) {
